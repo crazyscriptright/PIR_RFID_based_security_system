@@ -1,0 +1,91 @@
+#include <SPI.h>
+#include <MFRC522.h>
+
+// RFID Setup
+#define SDA_PIN 10
+#define RST_PIN 9
+MFRC522 mfrc522(SDA_PIN, RST_PIN);
+
+// PIR and Buzzer Pins
+const int pirSensorPin = 7;
+const int buzzerPin = 6;
+
+// Authorized RFID UID
+byte authorizedUID[] = {0xC3, 0x7B, 0x59, 0x31, 0x00};
+bool isAuthorized = false;
+bool motionHandled = false;  // Prevent repeated buzzer
+int pirState = LOW;
+
+void setup() {
+  Serial.begin(9600);
+  SPI.begin();
+  mfrc522.PCD_Init();
+  Serial.println("System Initialized. Please wait for PIR sensor to stabilize...");
+
+  pinMode(pirSensorPin, INPUT);
+  pinMode(buzzerPin, OUTPUT);
+  digitalWrite(buzzerPin, LOW);
+
+  delay(30000);  // Allow PIR to stabilize
+  Serial.println("PIR Sensor Ready.");
+}
+
+void loop() {
+  // === RFID CARD CHECK ===
+  if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+    Serial.print("RFID UID: ");
+    bool match = true;
+
+    for (byte i = 0; i < mfrc522.uid.size; i++) {
+      Serial.print(mfrc522.uid.uidByte[i], HEX);
+      if (mfrc522.uid.uidByte[i] != authorizedUID[i]) {
+        match = false;
+      }
+    }
+    Serial.println();
+
+    if (match) {
+      Serial.println("Access Granted.");
+      isAuthorized = true;
+      motionHandled = false;  // Allow motion after card is shown
+      digitalWrite(buzzerPin, LOW);
+    } else {
+      Serial.println("Access Denied!");
+      digitalWrite(buzzerPin, HIGH);  // Unauthorized card
+    }
+
+    mfrc522.PICC_HaltA();
+  }
+
+  // === PIR SENSOR CHECK ===
+  pirState = digitalRead(pirSensorPin);
+
+  if (pirState == HIGH && !motionHandled) {
+    delay(100);  // Debounce to confirm it's not a glitch
+    if (digitalRead(pirSensorPin) == HIGH) {
+      Serial.println("Motion Detected!");
+
+      if (!isAuthorized) {
+        Serial.println("Unauthorized motion! Buzzer ON");
+        digitalWrite(buzzerPin, HIGH);
+      } else {
+        Serial.println("Authorized person, no buzzer.");
+        digitalWrite(buzzerPin, LOW);
+      }
+
+      motionHandled = true;  // Prevent repeating the message and buzzer
+    }
+  }
+
+  // If no motion, reset state
+  if (pirState == LOW) {
+    if (motionHandled) {
+      Serial.println("Motion Ended.");
+      motionHandled = false;
+      isAuthorized = false;  // Reset authorization
+      digitalWrite(buzzerPin, LOW);
+    }
+  }
+
+  delay(100);
+}
