@@ -1,4 +1,4 @@
-# 🚨 IoT Mini Security System
+# 🚨 PIR and RFID based security system
 
 A simple yet effective IoT-based security system using RFID, PIR sensor, and buzzer. This project detects unauthorized access and motion, providing real-time alerts.
 
